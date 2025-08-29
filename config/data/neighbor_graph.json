@@ -1,0 +1,10 @@
+{
+    "transaction_vars" : ["SOC", "CALCOPP", "KAVOPP",
+    "BOUWJAAR", "DUMMY_GARAGE", "DUMMY_MONUMENT", "FOTOWIJZER_TYPE", "DATUM"],
+    "neighborhood_vars": [],
+    "spatial_level": "BUURTCODE",
+    "spatial_var" : "BUURTCODE",
+    "transaction_date": "DATUM",
+    "target_price": "KOOPSOM"
+
+}

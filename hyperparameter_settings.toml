@@ -1,0 +1,14 @@
+[experiment]
+    sampling_algorithm = "random"
+    primary_metric = "test_loss"
+    goal = "Minimize"
+    max_total_trials = 16
+    max_concurrent_trials = 16
+    timeout = 10800  # seconds
+
+[hyperparameters]
+    [hyperparameters.batch_size]
+        description = "batch size" 
+        default = 16
+        type = 'category'
+        options = [16]

@@ -1,0 +1,56 @@
+[experiment]
+    sampling_algorithm = "random"
+    primary_metric = "test_loss"
+    goal = "Minimize"
+    max_total_trials = 16
+    max_concurrent_trials = 16
+    
+[hyperparameters]
+    [hyperparameters.batch_size]
+        description = "batch size" 
+        default = 64
+        type = 'category'
+        options = [32, 64, 128]
+
+    [hyperparameters.num_layers_micro]
+        description = "number of conv layers in micro encoder"
+        default = 2
+        type = 'category'
+        options = [1, 2, 3, 5]
+    
+    [hyperparameters.num_layers_macro]
+        description = "number of conv layers in macro encoder"
+        default = 2
+        type = 'category'
+        options = [1, 2, 3, 5]
+
+    [hyperparameters.learning_rate]
+        description = "learning rate"
+        default = 0.0001
+        type = 'category'
+        options = [0.001, 0.0005, 0.0001, 0.00005, 0.00001]
+
+    [hyperparameters.weight_decay]
+        description = "weight decay"
+        default = 0.0001
+        type = 'category'
+        options = [0.0005, 0.0001, 0.00005, 0.00001]
+
+    [hyperparameters.hidden_channels_micro]
+        description = "hidden dimension of micro encoder"
+        default = 64
+        type = 'category'
+        options = [16, 64, 100]
+
+    [hyperparameters.hidden_channels_macro]
+        description = "hidden dimension of macro encoder"
+        default = 64
+        type = 'category'
+        options = [16, 64, 100]
+    
+    [hyperparameters.hidden_channels_cross]
+        description = "hidden dimension of cross level interaction"
+        default = 64
+        type = 'category'
+        options = [16, 64, 100]
+

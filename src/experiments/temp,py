@@ -1,0 +1,367 @@
+# # Setting up the project structure using placeholder classes and comments
+# # for different components described in the step-by-step implementation plan.
+
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+# from torch_geometric.nn import SAGEConv, GCNConv, MessagePassing
+# from torch_geometric.data import HeteroData
+
+# # ----- 1. Gating Module for Spatio-Temporal Fusion -----
+# class GatingModule(nn.Module):
+#     def __init__(self, hidden_dim):
+#         super().__init__()
+#         self.linear_current = nn.Linear(hidden_dim, hidden_dim)
+#         self.linear_prev = nn.Linear(hidden_dim, hidden_dim)
+#         self.sigmoid = nn.Sigmoid()
+
+#     def forward(self, h_t, h_t_prev):
+#         gate = self.sigmoid(self.linear_current(h_t) + self.linear_prev(h_t_prev))
+#         return gate * h_t + (1 - gate) * h_t_prev
+
+# # ----- 2. Transaction GNN Encoder -----
+# class TransactionEncoder(nn.Module):
+#     def __init__(self, in_channels, hidden_channels):
+#         super().__init__()
+#         self.conv1 = SAGEConv(in_channels, hidden_channels)
+#         self.conv2 = SAGEConv(hidden_channels, hidden_channels)
+
+#     def forward(self, x, edge_index):
+#         x = F.relu(self.conv1(x, edge_index))
+#         x = self.conv2(x, edge_index)
+#         return x
+
+# # ----- 3. Neighborhood GNN Encoder -----
+# class NeighborhoodEncoder(nn.Module):
+#     def __init__(self, in_channels, hidden_channels):
+#         super().__init__()
+#         self.conv1 = GCNConv(in_channels, hidden_channels)
+#         self.conv2 = GCNConv(hidden_channels, hidden_channels)
+
+#     def forward(self, x, edge_index):
+#         x = F.relu(self.conv1(x, edge_index))
+#         x = self.conv2(x, edge_index)
+#         return x
+
+# # ----- 4. Bidirectional Cross-Level Update -----
+# class BidirectionalFusion(nn.Module):
+#     def __init__(self, hidden_channels):
+#         super().__init__()
+#         self.gate = nn.Sequential(
+#             nn.Linear(2 * hidden_channels, hidden_channels),
+#             nn.Sigmoid()
+#         )
+
+#     def forward(self, trans_embeds, macro_embeds, trans_to_macro):
+#         # Get macro embedding for each transaction
+#         macro_context = macro_embeds[trans_to_macro]  # assuming 1-to-1 mapping
+#         fused_input = torch.cat([trans_embeds, macro_context], dim=1)
+#         gate = self.gate(fused_input)
+#         return gate * macro_context + (1 - gate) * trans_embeds
+
+# # ----- 5. Final Model Class -----
+# class HierarchicalGNN(nn.Module):
+#     def __init__(self, trans_in, macro_in, hidden, out_dim):
+#         super().__init__()
+#         self.trans_encoder = TransactionEncoder(trans_in, hidden)
+#         self.macro_encoder = NeighborhoodEncoder(macro_in, hidden)
+#         self.temporal_gate = GatingModule(hidden)
+#         self.cross_fusion = BidirectionalFusion(hidden)
+#         self.predictor = nn.Linear(hidden, out_dim)
+
+#         # Cache previous macro embedding for temporal gating
+#         self.prev_macro_state = None
+
+#     def forward(self, data: HeteroData):
+#         # Encode transaction-level graph
+#         trans_x = self.trans_encoder(
+#             data["transaction"].x,
+#             data["transaction", "to", "transaction"].edge_index
+#         )
+
+#         # Encode neighborhood-level graph
+#         macro_x = self.macro_encoder(
+#             data["neighborhood"].x,
+#             data["neighborhood", "to", "neighborhood"].edge_index
+#         )
+
+#         # Apply spatio-temporal gating at macro level
+#         if self.prev_macro_state is None:
+#             gated_macro = macro_x
+#         else:
+#             gated_macro = self.temporal_gate(macro_x, self.prev_macro_state)
+#         self.prev_macro_state = gated_macro.detach()
+
+#         # Apply bidirectional fusion for transaction-level
+#         trans_to_macro = data["transaction"].neighborhood_index  # mapping
+#         final_trans_x = self.cross_fusion(trans_x, gated_macro, trans_to_macro)
+
+#         # Predict final transaction values
+#         out = self.predictor(final_trans_x)
+#         return out
+
+
+
+# Re-import everything after state reset
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch_geometric.nn import SAGEConv, GCNConv
+from torch_geometric.data import HeteroData
+from sklearn.preprocessing import StandardScaler
+import pandas as pd
+import numpy as np
+
+# Dummy KNN edge construction
+def build_knn_edges(coords, k=5):
+    num_nodes = len(coords)
+    edges = []
+    for i in range(num_nodes):
+        dists = np.linalg.norm(coords - coords[i], axis=1)
+        nearest = np.argsort(dists)[1:k+1]
+        for j in nearest:
+            edges.append([i, j])
+    return torch.tensor(edges).t().contiguous()
+
+# Gating module
+class GatingModule(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.linear_current = nn.Linear(hidden_dim, hidden_dim)
+        self.linear_prev = nn.Linear(hidden_dim, hidden_dim)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, h_t, h_t_prev):
+        gate = self.sigmoid(self.linear_current(h_t) + self.linear_prev(h_t_prev))
+        return gate * h_t + (1 - gate) * h_t_prev
+
+# Transaction GNN
+class TransactionEncoder(nn.Module):
+    def __init__(self, in_channels, hidden_channels):
+        super().__init__()
+        self.conv1 = SAGEConv(in_channels, hidden_channels)
+        self.conv2 = SAGEConv(hidden_channels, hidden_channels)
+
+    def forward(self, x, edge_index):
+        x = F.relu(self.conv1(x, edge_index))
+        x = self.conv2(x, edge_index)
+        return x
+
+# Neighborhood GNN
+class NeighborhoodEncoder(nn.Module):
+    def __init__(self, in_channels, hidden_channels):
+        super().__init__()
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+
+    def forward(self, x, edge_index):
+        x = F.relu(self.conv1(x, edge_index))
+        x = self.conv2(x, edge_index)
+        return x
+
+# Cross-level fusion
+class BidirectionalFusion(nn.Module):
+    def __init__(self, hidden_channels):
+        super().__init__()
+        self.gate = nn.Sequential(
+            nn.Linear(2 * hidden_channels, hidden_channels),
+            nn.Sigmoid()
+        )
+
+    def forward(self, trans_embeds, macro_embeds, trans_to_macro):
+        macro_context = macro_embeds[trans_to_macro]
+        fused_input = torch.cat([trans_embeds, macro_context], dim=1)
+        gate = self.gate(fused_input)
+        return gate * macro_context + (1 - gate) * trans_embeds
+
+# Full hierarchical GNN model
+class HierarchicalGNN(nn.Module):
+    def __init__(self, trans_in, macro_in, hidden, out_dim):
+        super().__init__()
+        self.trans_encoder = TransactionEncoder(trans_in, hidden)
+        self.macro_encoder = NeighborhoodEncoder(macro_in, hidden)
+        self.temporal_gate = GatingModule(hidden)
+        self.cross_fusion = BidirectionalFusion(hidden)
+        self.predictor = nn.Linear(hidden, out_dim)
+        self.prev_macro_state = None
+
+    def forward(self, data: HeteroData):
+        trans_x = self.trans_encoder(
+            data["transaction"].x,
+            data["transaction", "to", "transaction"].edge_index
+        )
+        macro_x = self.macro_encoder(
+            data["neighborhood"].x,
+            data["neighborhood", "to", "neighborhood"].edge_index
+        )
+        if self.prev_macro_state is None:
+            gated_macro = macro_x
+        else:
+            gated_macro = self.temporal_gate(macro_x, self.prev_macro_state)
+        self.prev_macro_state = gated_macro.detach()
+        trans_to_macro = data["transaction"].neighborhood_index
+        final_trans_x = self.cross_fusion(trans_x, gated_macro, trans_to_macro)
+        out = self.predictor(final_trans_x)
+        return out
+
+# Build a single HeteroData graph object
+def build_hetero_graph(transaction_df, neighborhood_df, target_month_str, neighbor_edge_index, k=5):
+    """
+    Builds a HeteroData graph with an integrated prediction mask.
+
+    Args:
+        transaction_df: DataFrame with transaction features (must include 'month' column as 'YYYY-MM')
+        neighborhood_df: DataFrame with neighborhood features
+        target_month_str: target prediction month, e.g., '2022-08'
+        k: number of neighbors for KNN graph
+    """
+    data = HeteroData()
+    scaler = StandardScaler()
+
+    # === Normalize features ===
+    trans_x = scaler.fit_transform(transaction_df.drop(columns=['LOG_KOOPSOM', 'DATUM', 'BUURTCODE']).values)
+    neigh_x = neighborhood_df.drop(columns=['BUURTCODE']).values
+
+    # === Assign node features ===
+    data['transaction'].x = torch.tensor(trans_x, dtype=torch.float)
+    data['transaction'].y = torch.tensor(transaction_df['LOG_KOOPSOM'].values, dtype=torch.float)
+    data['neighborhood'].x = torch.tensor(neigh_x, dtype=torch.float)
+
+    # === Build edges ===
+    coords = transaction_df[['LAT', 'LON']].values
+    data['transaction', 'to', 'transaction'].edge_index = build_knn_edges(coords, k)
+
+    
+    data['neighborhood', 'to', 'neighborhood'].edge_index = neighbor_edge_index
+
+    # === Cross-level mapping ===
+    neigh_id_map = {nid: idx for idx, nid in enumerate(neighborhood_df['BUURTCODE'])}
+    trans_to_macro = [neigh_id_map[nid] for nid in transaction_df['BUURTCODE']]
+    data['transaction'].neighborhood_index = torch.tensor(trans_to_macro, dtype=torch.long)
+
+    # === Build prediction mask ===
+    is_target = (transaction_df['MONTH'] == target_month_str).values
+    data['transaction'].predict_mask = torch.tensor(is_target, dtype=torch.bool)
+
+    return data
+
+
+def train_with_window(graphs, model, optimizer, window_size=12, mode='rolling', device='cuda', epochs=1):
+    """
+    Trains the model with either rolling or expanding window.
+    
+    Args:
+        graphs: List of HeteroData graphs in temporal order.
+        model: HierarchicalGNN model.
+        optimizer: Optimizer (e.g., Adam).
+        window_size: Number of months in training window.
+        mode: 'rolling' or 'expanding'.
+        epochs: Number of epochs per step.
+    """
+    model.to(device)
+    loss_fn = nn.MSELoss()
+    history = []
+
+    for t in range(window_size, len(graphs)):
+        # Select window
+        if mode == 'rolling':
+            train_graphs = graphs[t - window_size:t]
+        elif mode == 'expanding':
+            train_graphs = graphs[:t]
+        else:
+            raise ValueError("Mode must be 'rolling' or 'expanding'")
+
+        # === Train on window ===
+        model.train()
+        for epoch in range(epochs):
+            for g in train_graphs:
+                g = g.to(device)
+                optimizer.zero_grad()
+                out = model(g)
+
+                train_mask = ~g['transaction'].predict_mask
+                y = g['transaction'].y
+                loss = loss_fn(out[train_mask], y[train_mask])
+                loss.backward()
+                optimizer.step()
+
+        # === Evaluate on current month ===
+        model.eval()
+        with torch.no_grad():
+            g_test = graphs[t].to(device)
+            out = model(g_test)
+            test_mask = g_test['transaction'].predict_mask
+            y_test = g_test['transaction'].y
+
+            test_loss = loss_fn(out[test_mask], y_test[test_mask])
+            print(f"[{mode.upper()}] Month {t}, Test MSE: {test_loss.item():.4f}")
+            history.append(test_loss.item())
+
+    return history
+
+from dateutil.relativedelta import relativedelta
+
+### 1. Data Loading Functions
+def load_graph_data(neighborhood_file, edge_file):
+    neighborhood_df = pd.read_csv(neighborhood_file)
+    edges = pd.read_csv(edge_file, index_col=0)
+    edge_index = adjacency_matrix_to_edge_index(edges)
+
+    node_features = {}
+    for year, group in neighborhood_df.groupby('YEAR'):
+        features = torch.tensor(group.drop(['BUURTCODE', 'YEAR'], axis=1).values, dtype=torch.float32)
+        node_features[year] = features
+
+    return node_features, edge_index
+
+def load_transaction_data(transaction_file):
+    df = pd.read_csv(transaction_file)
+    df['DATUM'] = pd.to_datetime(df['DATUM'])
+    df.sort_values('DATUM', inplace=True)
+
+    df['YEAR'] = df['DATUM'].dt.year
+    df['MONTH'] = df['DATUM'].dt.month
+    df.drop(["TRANSID", "DATUM"], axis=1, inplace=True)
+
+    return df
+
+def adjacency_matrix_to_edge_index(adj_matrix):
+
+    adj_matrix = adj_matrix.to_numpy()
+
+    edge_list = torch.nonzero(torch.tensor(adj_matrix), as_tuple=False)
+
+    edge_index = torch.cat([edge_list, edge_list.flip(0)], dim=0)
+
+    edge_index = edge_index.unique(dim=0)
+
+    return edge_index.T
+
+def create_graph_sequence(trans_df, neigh_df, k=10):
+    graph_sequence = []
+    month_strs = []
+    for t in range(60, len(all_months)):  # Start after first 5 years
+        train_start = all_months[t - 60]
+        train_end = all_months[t - 1]
+        test_month = all_months[t]
+        test_str = test_month.strftime("%Y-%m")
+        month_strs.append(test_str)
+
+        # Rolling window transactions
+        window_trans = trans_df[(trans_df['date'] >= train_start) & (trans_df['date'] <= test_month)]
+        # Use same year for neighborhood features
+        neigh_year = test_month.year
+        neigh_month = test_month.month
+        window_neigh = neigh_df[(neigh_df['YEAR'] == neigh_year) & (neigh_df['MONTH'] == neigh_month)]
+
+        # Rename to standard columns
+        window_trans = window_trans.rename(columns={"LAT": "lat", "LON": "lon", "BUURTCODE": "neigh_id", "PRICE": "price"})
+        window_neigh = window_neigh.rename(columns={"BUURTCODE": "neigh_id"})
+
+        graph = build_hetero_graph(window_trans, window_neigh, target_month_str=test_str, k=k)
+        graph_sequence.append(graph)
+    return graph_sequence, month_strs
+
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+rolling_loss_history = train_with_window(graph_sequence, model, optimizer, mode='rolling', window_size=12, epochs=2)
