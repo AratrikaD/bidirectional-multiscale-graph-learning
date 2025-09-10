@@ -7,6 +7,7 @@ from src.utils.azure_utils import parse_hyperparameter_args, get_hyperparameter_
 from src.experiments.final_alt import run_exp
 from src.experiments.online_learning import run_exp_online
 from src.experiments.final_model_exp import run_final_exp
+from src.experiments.mugrep_exp import run_mugrep_exp
 
 # from src.experiments.dynamic_baseline import run_exp
 import argparse
@@ -67,7 +68,8 @@ def main(params):
             data_path = os.path.join(script_dir,"housing-data")
             # output_path = os.path.join(script_dir, "outputs")
         print(data_path)
-        run_final_exp(data_path, hyperparameters=params)
+        # run_final_exp(data_path, hyperparameters=params)
+        run_mugrep_exp(data_path, hyperparameters=params)
         # run_exp_online(data_path)
         # run_lgbm_experiment(data_path)
 

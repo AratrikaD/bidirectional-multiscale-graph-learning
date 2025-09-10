@@ -6,12 +6,14 @@ from src.graphs.build_graph import load_graph_data, load_transaction_data
 from src.models.hstgnn import HierarchicalHeteroGNN
 
 
+
+
 def run_final_exp(data_path, hyperparameters):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     neighborhood_features_path = os.path.join(data_path,"all_neighborhood_features_rotterdam.csv")
     edge_path = os.path.join(data_path,"rotterdam_adj_2023.csv")
-    transaction_path = os.path.join(data_path, "rotterdam_transaction_data.csv")
+    transaction_path = os.path.join(data_path, "synthetic_transactions.csv")
 
     node_features, edge_index = load_graph_data(neighborhood_features_path, edge_path)
     transactions = load_transaction_data(transaction_path)
@@ -30,5 +32,5 @@ def run_final_exp(data_path, hyperparameters):
     
     print("start training")
     train_sliding_window(model=model, optimizer=optimizer, criterion=criterion, transactions=transactions, node_features=node_features, edge_index=edge_index,
-                        window_months=25, epochs=100, batch_size=64, base_patience=10)
+                        window_months=80, epochs=1, batch_size=64, base_patience=10)
     

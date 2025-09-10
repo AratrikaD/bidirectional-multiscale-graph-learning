@@ -5,14 +5,11 @@ tomli
 azureml-core==1.59.0
 azureml-dataset-runtime==1.59.0
 azureml-defaults==1.59.0
-azure-ml==0.0.1
-azure-ml-component==0.9.18.post2
 azureml-mlflow==1.59.0
-azureml-contrib-services==1.59.0
 azureml-contrib-services==1.59.0
 torch-tb-profiler~=0.4.0
 azureml-inference-server-http
-azureml-cli
+# azureml-cli   # optional, may cause issues
 
 torch
 torch_geometric
@@ -24,3 +21,5 @@ pyarrow
 networkx
 pandas
 numpy~=1.23
+
+

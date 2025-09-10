@@ -41,6 +41,6 @@ def parse_hyperparameter_args(hyperparameter_path: str) -> argparse.Namespace:
             parser.add_argument(f'--{hp_name}', 
                                 default=hp_specs['default'], 
                                 help=hp_specs['description'])
-    parser.add_argument('--data_path', default='gnns-for-property-valuation\housing-data', help='Path to the data folder')
+    parser.add_argument('--data_path', default='housing-data', help='Path to the data folder')
     return parser.parse_args()
 
