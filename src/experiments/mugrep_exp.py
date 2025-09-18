@@ -76,7 +76,7 @@ def run_mugrep_exp(data_path, hyperparameters):
 
 
     optimizer = torch.optim.Adam(model.parameters(),
-                                 lr= 0.001,
+                                 lr= 0.0001,
                                  weight_decay= 1e-5)
     criterion = nn.MSELoss()
 
@@ -85,6 +85,6 @@ def run_mugrep_exp(data_path, hyperparameters):
         transactions, comm_graph,
         idmap_rev, dmap_rev, nb_latest,
         window_months=61,
-        epochs=50,
+        epochs=100,
         batch_size=64,
     )
