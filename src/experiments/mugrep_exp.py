@@ -57,7 +57,7 @@ def run_mugrep_exp(data_path, hyperparameters):
 
     neighborhood_features_path = os.path.join(data_path, "all_neighborhood_features_rotterdam.csv")
     edge_path = os.path.join(data_path, "rotterdam_adj_2023.csv")
-    transaction_path = os.path.join(data_path, "synthetic_transactions.csv")
+    transaction_path = os.path.join(data_path, "rotterdam_transaction_data.csv")
 
     comm_graph, nb_latest, idmap, idmap_rev, dmap, dmap_rev = load_neighborhood_data(neighborhood_features_path, edge_path)
     comm_graph = comm_graph.to(device)
@@ -76,7 +76,7 @@ def run_mugrep_exp(data_path, hyperparameters):
 
 
     optimizer = torch.optim.Adam(model.parameters(),
-                                 lr= 0.001,
+                                 lr= 0.0001,
                                  weight_decay= 1e-5)
     criterion = nn.MSELoss()
 
@@ -85,6 +85,6 @@ def run_mugrep_exp(data_path, hyperparameters):
         transactions, comm_graph,
         idmap_rev, dmap_rev, nb_latest,
         window_months=61,
-        epochs=50,
+        epochs=100,
         batch_size=64,
     )

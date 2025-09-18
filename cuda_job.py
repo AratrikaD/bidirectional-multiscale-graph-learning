@@ -105,13 +105,13 @@ if __name__ == "__main__":
     command_string = update_command_string(command_string, hyperparameters)
     # Define the command job
     command_job = command(
-        code="gnns-for-property-valuation", ## Adjust this path based on your project structure
+        code="bidirectional-multiscale-graph-learning", ## Adjust this path based on your project structure
         command=command_string, ## Adjust this path based on your project structure
         inputs=hyperparameter_inputs,
         compute=compute_name,
         environment=env_name,
         outputs={},
-        name="hyperparameter_tuning_w_2", # Name of the job
+        name="mugrep-original-lr0001-e-100", # Name of the job
         experiment_name=experiment_name,
         identity=identity
     )
