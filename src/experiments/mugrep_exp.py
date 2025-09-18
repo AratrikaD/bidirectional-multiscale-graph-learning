@@ -85,6 +85,6 @@ def run_mugrep_exp(data_path, hyperparameters):
         transactions, comm_graph,
         idmap_rev, dmap_rev, nb_latest,
         window_months=61,
-        epochs=60,
+        epochs=50,
         batch_size=64,
     )
