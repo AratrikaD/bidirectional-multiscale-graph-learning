@@ -219,6 +219,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         test_y = torch.tensor(test_df["LOG_KOOPSOM"].values, dtype=torch.float32).unsqueeze(1)
 
         node_features_year = node_features.get(train_end.year, node_features[max(node_features.keys())])
+        
 
         for epoch in range(epochs):
             model.train()
@@ -333,10 +334,10 @@ def plot_learning_curves(num_epochs, train_losses, test_losses, train_mapes, tes
 
 def run_exp(data_path):
     gnn = NeighborhoodGNN(in_dim=202, hidden_dim=128, out_dim=32)
-    predictor = TransactionPredictor(trans_dim=12, emb_dim=32, time_dim=2, hidden_dim=100)
+    predictor = TransactionPredictor(trans_dim=11, emb_dim=32, time_dim=2, hidden_dim=100)
     model = IntegratedModel(gnn, predictor)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=0.0001)
     criterion = nn.MSELoss()
 
     neighborhood_features_path = os.path.join(data_path,"all_neighborhood_features_rotterdam.csv")
@@ -346,7 +347,7 @@ def run_exp(data_path):
     edge_path = os.path.join(data_path,"rotterdam_adj_2023.csv")
     # r"C:\Users\AratrikaD\rdlabs-gnns-for-property-valuation\gnns-for-property-valuation\housing-data\rotterdam_adj_2023.csv" 
     node_features, edge_index = load_graph_data(neighborhood_features_path, edge_path)
-    transaction_path = os.path.join(data_path, "rotterdam_transaction_data.csv")
+    transaction_path = os.path.join(data_path, "synthetic_transactions.csv")
     transactions = load_transaction_data(transaction_path)
     print("start training")
     train_sliding_window(model, optimizer, criterion, transactions, node_features, edge_index,
