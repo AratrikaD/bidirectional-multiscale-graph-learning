@@ -120,7 +120,7 @@ def get_batch_subgraph(batch_idx, hetero_graph, transactions_df, batch_neighborh
 
 
 def train_sliding_window(model, optimizer, criterion, transactions, node_features, edge_index, mode='neighborhood_temporal',
-                         window_months=61, epochs=10, batch_size=128, base_patience=3):
+                         window_months=61, epochs=10, batch_size=64 , base_patience=3):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)

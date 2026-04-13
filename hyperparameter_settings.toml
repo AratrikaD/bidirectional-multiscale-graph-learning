@@ -9,6 +9,6 @@
 [hyperparameters]
     [hyperparameters.batch_size]
         description = "batch size" 
-        default = 16
+        default = 64
         type = 'category'
         options = [16]

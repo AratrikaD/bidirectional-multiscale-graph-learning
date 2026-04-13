@@ -69,8 +69,8 @@ def main(params):
             data_path = os.path.join(script_dir,"housing-data")
             # output_path = os.path.join(script_dir, "outputs")
         print(data_path)
-        # run_final_exp(data_path, hyperparameters=params)
-        run_exp(data_path)
+        run_final_exp(data_path, hyperparameters=params)
+        # run_exp(data_path)
         # run_exp_online(data_path)
         # run_lgbm_experiment(data_path)
 
