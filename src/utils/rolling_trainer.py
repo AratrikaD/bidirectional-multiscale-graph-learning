@@ -9,7 +9,7 @@ from src.graphs.build_graph import build_hetero_graph
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import subgraph
 from torch.optim.lr_scheduler import LambdaLR
-
+import time
 
 
 def evaluate(model, train_indices, test_indices, hetero_graph, criterion):
@@ -17,8 +17,15 @@ def evaluate(model, train_indices, test_indices, hetero_graph, criterion):
 
     with torch.no_grad():
         # pred = model(hetero_graph).squeeze(-1)
+        torch.cuda.synchronize()
+        start = time.time()
         
         pred, embeddings = model.forward_with_embeddings(hetero_graph)
+
+        torch.cuda.synchronize()
+        end = time.time()
+        inference_time = end - start
+
 
         pred = pred.squeeze(-1)
         embeddings = embeddings.cpu().numpy()
@@ -30,7 +37,7 @@ def evaluate(model, train_indices, test_indices, hetero_graph, criterion):
         mse_test = criterion(pred[test_indices], y_true[test_indices]).item()
         mape_test = mean_absolute_percentage_error(y_true[test_indices].cpu(), pred[test_indices].cpu()).item()
 
-    return mse_train, mape_train, mse_test, mape_test, pred.cpu().numpy(), y_true.cpu().numpy(), embeddings
+    return mse_train, mape_train, mse_test, mape_test, pred.cpu().numpy(), y_true.cpu().numpy(), embeddings, inference_time
 
 
 
@@ -183,10 +190,16 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         patience = float('inf') if window_count <= 3 else base_patience
 
         print("start training")
+        window_start_time = time.time()
 
         for epoch in range(epochs):
             model.train()
             batch_losses = []
+            epoch_start_time = time.time()
+
+            epoch_subgraph_time = 0.0
+            epoch_compute_time = 0.0
+            batch_count = 0
 
             for batch in train_loader:
                 batch_idx = batch[0].to(device)  # indices of nodes in this batch
@@ -196,6 +209,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 batch_neigh_feats = node_features.get(first_year, node_features[max(node_features.keys())]).to(device)
 
                 # Get the batch subgraph
+                t0 = time.time()
                 batch_subgraph, batch_pos = get_batch_subgraph(
                     batch_idx = batch_idx,
                     hetero_graph= hetero_graph,
@@ -203,6 +217,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                     batch_neighborhood_features=batch_neigh_feats,
                     mode=mode
                 )
+                t1 = time.time()
 
                 # Now forward pass on batch_subgraph
                 out = model(batch_subgraph).squeeze(-1)
@@ -212,14 +227,35 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
                 loss.backward()
                 optimizer.step()
+                t2 = time.time()
+
+                epoch_subgraph_time += (t1 - t0)
+                epoch_compute_time += (t2 - t1)
+                batch_count += 1
 
                 batch_losses.append(loss.item())
 
 
             # scheduler.step()
+            epoch_end_time = time.time()
+            epoch_time = epoch_end_time - epoch_start_time
+
+            avg_batch_time = epoch_time / max(batch_count, 1)
+
+            runtime_stats.append({
+                "window_start": train_start.strftime('%Y-%m'),
+                "epoch": epoch + 1,
+                "epoch_time_sec": epoch_time,
+                "avg_batch_time_sec": avg_batch_time,
+                "subgraph_time_sec": epoch_subgraph_time,
+                "compute_time_sec": epoch_compute_time,
+                "subgraph_pct": epoch_subgraph_time / epoch_time if epoch_time > 0 else 0,
+                "compute_pct": epoch_compute_time / epoch_time if epoch_time > 0 else 0,
+                "num_batches": batch_count
+            })
 
             print("evaluate")
-            train_mse, train_mape, test_mse, test_mape, out_eval, y_true_eval, embeddings = evaluate(
+            train_mse, train_mape, test_mse, test_mape, out_eval, y_true_eval, embeddings, inference_time = evaluate(
                 model, train_indices, test_indices, hetero_graph, criterion
             )
 
@@ -229,7 +265,9 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 "train_mape": train_mape,
                 "test_mape": test_mape,
                 "train_mse": train_mse,
-                "test_mse": test_mse
+                "test_mse": test_mse,
+                "inference_time_full_sec": inference_time,
+                "inference_time_per_node_ms": (inference_time / len(y_true)) * 1000
                 
             })
             train_mape_hist.append(train_mape)
@@ -255,6 +293,8 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                     "y_true": y_true_eval[test_indices.cpu()],
                     "y_pred": out_eval[test_indices.cpu()],
                     "embedding": embeddings[test_indices.cpu()].tolist(),
+                    "inference_time_full_sec": inference_time,
+                    "inference_time_per_node_ms": (inference_time / len(y_true)) * 1000
                 })
             else:
                 patience_counter += 1
@@ -270,7 +310,16 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
-            
+        
+        window_end_time = time.time()
+        window_time = window_end_time - window_start_time
+
+        runtime_stats.append({
+            "window_start": train_start.strftime('%Y-%m'),
+            "epoch": "window_total",
+            "window_time_sec": window_time,
+            "num_train_samples": len(train_df)
+        })
         all_window_preds.append(preds_df)
         start += relativedelta(months=1)
 
@@ -279,3 +328,6 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
     stats_df = pd.DataFrame(epoch_stats)
     stats_df.to_csv("./outputs/training_stats.csv", index=False)
+
+    runtime_df = pd.DataFrame(runtime_stats)
+    runtime_df.to_csv("./outputs/runtime_stats.csv", index=False)

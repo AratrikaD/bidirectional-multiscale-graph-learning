@@ -1,2 +1,5 @@
 /mlruns
 __pycache__
+/gnn_paper
+/figures
+/outputs
