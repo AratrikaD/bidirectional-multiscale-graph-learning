@@ -15,7 +15,13 @@ from src.utils.metrics import mean_absolute_percentage_error
 def evaluate_mugrep(model, event_graph, comm_graph, is_test, criterion):
     model.eval()
     with torch.no_grad():
+        torch.cuda.synchronize()
+        start = time.time()
         preds = model(event_graph, comm_graph).squeeze(-1)
+
+        torch.cuda.synchronize()
+        end = time.time()
+        inference_time = end - start
         y_true = event_graph.y.squeeze(-1)
 
         mse_train = criterion(preds[~is_test], y_true[~is_test]).item()
@@ -23,7 +29,7 @@ def evaluate_mugrep(model, event_graph, comm_graph, is_test, criterion):
         mse_test = criterion(preds[is_test], y_true[is_test]).item()
         mape_test = mean_absolute_percentage_error(y_true[is_test].cpu(), preds[is_test].cpu())
 
-    return mse_train, mape_train, mse_test, mape_test, preds.cpu().numpy(), y_true.cpu().numpy()
+    return mse_train, mape_train, mse_test, mape_test, preds.cpu().numpy(), y_true.cpu().numpy(), inference_time
 
 
 def build_event_graph(combined_df, train_df, idmap, nb_latest, time_window_days=90, k_neighbors=5):
@@ -78,7 +84,7 @@ def build_event_graph(combined_df, train_df, idmap, nb_latest, time_window_days=
 def train_sliding_window_mugrep(model, optimizer, criterion,
                                 transactions, comm_graph,
                                 idmap_rev, dmap_rev, nb_latest,
-                                window_months=61, epochs=30, batch_size=512):
+                                window_months=61, epochs=30, batch_size=128):
 
     device = next(model.parameters()).device
 
@@ -91,6 +97,7 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
     end = max_date.to_period("M").to_timestamp()
 
     all_preds, all_stats = [], []
+    runtime_stats = []
 
     while start + relativedelta(months=window_months + 1) <= end:
         train_start = start
@@ -98,6 +105,11 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
         test_month = train_end
         
         print(f"\n🪟 Window: {train_start.date()} → {train_end.date()} (Test: {test_month.strftime('%Y-%m')})")
+
+        window_start_time = time.time()
+        total_epoch_time = 0.0
+        epochs_ran = 0
+        total_batches_window = 0
         # === Split train/test ===
         train_df = transactions[(transactions["DATUM"] >= train_start) & (transactions["DATUM"] < train_end)].copy()
         test_df = transactions[(transactions["DATUM"].dt.to_period("M") == test_month.to_period("M"))].copy()
@@ -129,10 +141,16 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
             model.train()
             batch_losses = []
 
+            epoch_start_time = time.time()
+            epoch_subgraph_time = 0.0
+            epoch_compute_time = 0.0
+            epoch_total_time = 0.0
+            batch_count = 0
+
             for (batch_idx,) in train_loader:
                 batch_idx = batch_idx.to(device)
 
-                
+                t0 = time.time()
                 # Build subgraph for this batch
                 sub_edge_index, edge_attr, mapping = subgraph(
                     batch_idx,
@@ -157,17 +175,50 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
                     
                 
                 subgraph_data = subgraph_data.to(device)
+                t1 = time.time()
 
                 optimizer.zero_grad()
                 preds = model(subgraph_data, comm_graph).squeeze(-1)  
                 loss = criterion(preds, subgraph_data.y.squeeze(-1))
                 loss.backward()
                 optimizer.step()
+
+                t2 = time.time()
+                epoch_subgraph_time += (t1 - t0)
+                epoch_compute_time += (t2 - t1)
+                epoch_total_time += (t2 - t0)
+                batch_count += 1
+                total_batches_window += 1
+
                 batch_losses.append(loss.item())
             
-            mse_train, mape_train, mse_test, mape_test, preds_eval, y_eval = evaluate_mugrep(
+            epoch_end_time = time.time()
+            epoch_time = epoch_end_time - epoch_start_time
+
+            avg_batch_time = epoch_time / max(batch_count, 1)
+
+            total_epoch_time += epoch_time
+            epochs_ran += 1
+
+            
+            mse_train, mape_train, mse_test, mape_test, preds_eval, y_eval, inference_time = evaluate_mugrep(
                 model, event_graph, comm_graph, is_test, criterion
             )
+
+            
+            runtime_stats.append({
+                "window_start": train_start.strftime('%Y-%m'),
+                "epoch": epoch + 1,
+                "epoch_time_sec": epoch_time,
+                "avg_batch_time_sec": avg_batch_time,
+                "subgraph_time_sec": epoch_subgraph_time,
+                "compute_time_sec": epoch_compute_time,
+                "subgraph_pct": epoch_subgraph_time / epoch_time if epoch_time > 0 else 0,
+                "compute_pct": epoch_compute_time / epoch_time if epoch_time > 0 else 0,
+                "inference_time_full_sec": inference_time,
+                "inference_time_per_node_ms": (inference_time / len(y_eval)) * 1000,
+                "num_batches": batch_count
+            })
 
             # print(f"🪟 {train_start.strftime('%Y-%m')} | "
             #       f"Epoch {epoch+1}/{epochs} | "
@@ -180,10 +231,15 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
                 best_state = deepcopy(model.state_dict())
 
         # === Restore best model and save predictions ===
+        window_end_time = time.time()
+        window_time = window_end_time - window_start_time
+
+        avg_epoch_time = total_epoch_time / max(epochs_ran, 1)
+        avg_batch_time_window = total_epoch_time / max(total_batches_window, 1)
         if best_state is not None:
             model.load_state_dict(best_state)
 
-        _, _, mse_test, mape_test, preds_eval, y_eval = evaluate_mugrep(
+        _, _, mse_test, mape_test, preds_eval, y_eval, inference_time = evaluate_mugrep(
             model, event_graph, comm_graph, is_test, criterion
         )
 
@@ -203,10 +259,26 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
             "test_mape": mape_test
         })
 
+        runtime_stats.append({
+            "window_start": train_start.strftime('%Y-%m'),
+            "epoch": "window_total",
+            "window_time_sec": window_time,
+            "avg_epoch_time_sec": avg_epoch_time,
+            "avg_batch_time_sec": avg_batch_time_window,
+            "epochs_ran": epochs_ran,
+            "total_batches": total_batches_window,
+            "inference_time_full_sec": inference_time,
+            "inference_time_per_node_ms": (inference_time / len(y_eval)) * 1000,
+            "num_train_samples": len(train_df)
+        })
+
+       
         start += relativedelta(months=1)
 
     preds_all = pd.concat(all_preds, ignore_index=True)
     stats_all = pd.DataFrame(all_stats)
+    runtime_df = pd.DataFrame(runtime_stats)
+    runtime_df.to_csv("./outputs/mugrep_runtime_stats.csv", index=False)
 
     preds_all.to_csv("./outputs/mugrep_preds.csv", index=False)
     stats_all.to_csv("./outputs/mugrep_stats.csv", index=False)
