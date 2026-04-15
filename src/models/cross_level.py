@@ -23,14 +23,16 @@ class CrossLevelInteraction(nn.Module):
         num_neigh = macro_embed.size(0)
 
         # Bottom-up aggregation
-        macro_agg = torch.zeros((num_neigh, h_micro_proj.size(1)), device=trans_embed.device)
-        macro_agg = macro_agg.index_add(0, trans_to_neigh, h_micro_proj)
-        counts = torch.bincount(trans_to_neigh, minlength=num_neigh).unsqueeze(1).clamp(min=1)
-        bottom_up_macro = macro_agg / counts
+        # macro_agg = torch.zeros((num_neigh, h_micro_proj.size(1)), device=trans_embed.device)
+        # macro_agg = macro_agg.index_add(0, trans_to_neigh, h_micro_proj)
+        # counts = torch.bincount(trans_to_neigh, minlength=num_neigh).unsqueeze(1).clamp(min=1)
+        # bottom_up_macro = macro_agg / counts
 
-        # Fuse macro GNN and bottom-up signals
-        fuse_gate = torch.sigmoid(self.W_fuse(bottom_up_macro) + self.U_fuse(h_macro_proj))
-        fused_macro_embed = fuse_gate * h_macro_proj + (1 - fuse_gate) * bottom_up_macro
+        # # Fuse macro GNN and bottom-up signals
+        # fuse_gate = torch.sigmoid(self.W_fuse(bottom_up_macro) + self.U_fuse(h_macro_proj))
+        # fused_macro_embed = fuse_gate * h_macro_proj + (1 - fuse_gate) * bottom_up_macro
+
+        fused_macro_embed = h_macro_proj 
         
         # Top-down injection
         aligned_macro = fused_macro_embed[trans_to_neigh]
