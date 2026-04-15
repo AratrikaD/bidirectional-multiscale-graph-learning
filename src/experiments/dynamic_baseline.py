@@ -13,6 +13,7 @@ from dateutil.relativedelta import relativedelta
 import sys
 import os
 import mlflow
+import time
 # from src.utils.azure_utils import parse_hyperparameter_args
 
 ### 1. Data Loading Functions
@@ -143,6 +144,9 @@ def evaluate(model, data_loader, edge_index, node_features_year, criterion):
     total_loss, total_mse, total_mape, num_samples = 0.0, 0.0, 0.0, 0
 
     with torch.no_grad():
+        torch.cuda.synchronize()
+        start = time.time()
+
         for batch in data_loader:
             trans_feats, node_idx, time_feats, prices = batch
 
@@ -160,7 +164,10 @@ def evaluate(model, data_loader, edge_index, node_features_year, criterion):
             total_mape += mape.item() * prices.size(0)
             num_samples += prices.size(0)
 
-    return total_loss / len(data_loader), total_mse / num_samples, total_mape / num_samples
+    torch.cuda.synchronize()
+    end = time.time()
+    inference_time = end - start
+    return total_loss / len(data_loader), total_mse / num_samples, total_mape / num_samples, inference_time
 
 
 from dateutil.relativedelta import relativedelta
@@ -183,6 +190,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
     # To track relative errors per epoch
     epoch_stats = []
+    runtime_stats = []
 
     while start + relativedelta(months=window_months + 1) <= end:
         train_start = start
@@ -190,6 +198,10 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         test_month = train_end
 
         print(f"\n🪟 Window: {train_start.date()} → {train_end.date()} (Test: {test_month.strftime('%Y-%m')})")
+        window_start_time = time.time()
+        total_epoch_time = 0.0
+        epochs_ran = 0
+        total_batches_window = 0
 
         # Filter window
         train_df = transactions[(transactions["DATUM"] >= train_start) & (transactions["DATUM"] < train_end)].copy()
@@ -222,23 +234,37 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         
 
         for epoch in range(epochs):
+            epoch_start_time = time.time()
+            batch_count = 0
             model.train()
             total_loss = 0.0
             train_loader = create_batches(train_feats, train_node_idx, train_time, train_y, batch_size)
 
             for batch in train_loader:
+                t0 = time.time()
                 optimizer.zero_grad()
                 trans_feats_b, node_idx_b, time_feats_b, y_b = batch
                 preds = model(trans_feats_b, node_features_year, edge_index, node_idx_b, time_feats_b)
                 loss = criterion(preds, y_b)
                 loss.backward()
                 optimizer.step()
+                t1 = time.time()
                 total_loss += loss.item()
+                batch_count += 1
+                total_batches_window += 1
+
+            epoch_end_time = time.time()
+            epoch_time = epoch_end_time - epoch_start_time
+
+            avg_batch_time = epoch_time / max(batch_count, 1)
+
+            total_epoch_time += epoch_time
+            epochs_ran += 1
 
             # Evaluate
-            train_loss, train_mse, train_mape = evaluate(model, train_loader, edge_index, node_features_year, criterion)
+            train_loss, train_mse, train_mape, train_inf_time = evaluate(model, train_loader, edge_index, node_features_year, criterion)
             test_loader = create_batches(test_feats, test_node_idx, test_time, test_y, batch_size)
-            test_loss, test_mse, test_mape = evaluate(model, test_loader, edge_index, node_features_year, criterion)
+            test_loss, test_mse, test_mape, test_inf_time = evaluate(model, test_loader, edge_index, node_features_year, criterion)
 
             # Save epoch-level stats
             epoch_stats.append({
@@ -248,6 +274,17 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 "test_mape": test_mape,
                 "train_mse": train_mse,
                 "test_mse": test_mse
+            })
+
+            runtime_stats.append({
+                "window_start": train_start.strftime('%Y-%m'),
+                "epoch": epoch + 1,
+                "epoch_time_sec": epoch_time,
+                "avg_batch_time_sec": avg_batch_time,
+                "num_batches": batch_count,
+                "train_inference_time_sec": train_inf_time,
+                "test_inference_time_sec": test_inf_time,
+                "test_inference_per_node_ms": (test_inf_time / len(test_df)) * 1000
             })
 
             print(f"Epoch {epoch+1}/{epochs} | Train MSE: {train_mse:.4f} | MAPE: {train_mape:.2f}% | "
@@ -280,6 +317,17 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 })
 
                 all_window_preds.append(preds_df)
+            
+        runtime_stats.append({
+            "window_start": train_start.strftime('%Y-%m'),
+            "epoch": "window_total",
+            "window_time_sec": window_time,
+            "avg_epoch_time_sec": avg_epoch_time,
+            "avg_batch_time_sec": avg_batch_time_window,
+            "epochs_ran": epochs_ran,
+            "total_batches": total_batches_window,
+            "num_train_samples": len(train_df)
+        })
 
         start += relativedelta(months=1)
 
@@ -290,6 +338,8 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
     # Save epoch stats
     stats_df = pd.DataFrame(epoch_stats)
     stats_df.to_csv("./outputs/training_stats.csv", index=False)
+    runtime_df = pd.DataFrame(runtime_stats)
+    runtime_df.to_csv("./outputs/runtime_stats_baseline.csv", index=False)
 
     # Optional: plot learning curves
     fig = plot_learning_curves(epochs, 

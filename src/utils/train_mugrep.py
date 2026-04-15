@@ -11,6 +11,7 @@ from src.models.mugrep import MugRepModel
 from torch_geometric.utils import subgraph
 from torch.utils.data import DataLoader, TensorDataset
 from src.utils.metrics import mean_absolute_percentage_error
+import time
 
 def evaluate_mugrep(model, event_graph, comm_graph, is_test, criterion):
     model.eval()
