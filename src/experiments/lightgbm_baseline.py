@@ -7,6 +7,7 @@ from sklearn.metrics import root_mean_squared_error
 from sklearn.preprocessing import StandardScaler, RobustScaler
 
 import matplotlib.pyplot as plt
+import time
 
 
 def run_lgbm_experiment(data_path, output_path):
@@ -21,7 +22,7 @@ def run_lgbm_experiment(data_path, output_path):
     transaction_df['YEAR'] = transaction_df['DATUM'].dt.year
     transaction_df['MONTH'] = transaction_df['DATUM'].dt.month
     transaction_df.drop(["DATUM"], axis=1, inplace=True)
-
+    
     # Combine data
     def combine_data(transactions, node_features):
         combined_df = transactions.merge(node_features, how="left", on=["BUURTCODE", "YEAR"])
@@ -49,11 +50,14 @@ def run_lgbm_experiment(data_path, output_path):
     all_window_preds = []
     epoch_stats = []
     prev_booster = None
+    runtime_stats = []
 
     while test_month <= max_date:
         print("Train Start Date: ", start_train)
         print("Train End Date: ", end_train)
         print("Test Month", test_month)
+
+        window_start_time = time.time()
 
         train_data = combined_df[(combined_df["DATE"] >= start_train) & (combined_df["DATE"] <= end_train)]
         test_data = combined_df[combined_df["DATE"] == test_month]
@@ -66,6 +70,7 @@ def run_lgbm_experiment(data_path, output_path):
                     'num_leaves': 1000, 'min_data_in_leaves': 10, 'feature_fraction': 0.7, 'max_depth': 75,
                     'lambda_l2': 10e-5, 'path_smooth': 10e-5, 'n_jobs': -1}
 
+        train_start_time = time.time()
         if model is None:
             print("Training new model...")
             model = LGBMRegressor(**base_params, verbose=-1)
@@ -82,14 +87,23 @@ def run_lgbm_experiment(data_path, output_path):
             )
             prev_booster = model.booster_
 
+        train_end_time = time.time()
+        train_time = train_end_time - train_start_time
         # Make predictions
+        inf_start = time.time()
         predictions = model.predict(test_data[features])
+        inf_end = time.time()
+        inference_time = inf_end - inf_start
         actuals = test_data[target].values
+        inference_per_sample_ms = (inference_time / len(test_data)) * 1000
 
         # Train predictions for metrics
         train_preds = model.predict(train_data[features])
         train_mse = np.mean((train_data[target] - train_preds) ** 2)
         train_mape = np.mean(np.abs((np.exp(train_data[target]) - np.exp(train_preds)) / np.exp(train_data[target]))) * 100
+
+        window_end_time = time.time()
+        window_time = window_end_time - window_start_time
 
         print(f"Train MSE: {train_mse}")
         print(f"Train MAPE: {train_mape}")
@@ -117,6 +131,16 @@ def run_lgbm_experiment(data_path, output_path):
             "y_pred": predictions,
         })
 
+        runtime_stats.append({
+            "window_start": start_train.strftime('%Y-%m'),
+            "window_time_sec": window_time,
+            "train_time_sec": train_time,
+            "inference_time_sec": inference_time,
+            "inference_per_sample_ms": inference_per_sample_ms,
+            "num_train_samples": len(train_data),
+            "num_test_samples": len(test_data)
+        })
+
         all_window_preds.append(preds_df)
         # Move window forward
         print("current start:", start_train)
@@ -136,6 +160,9 @@ def run_lgbm_experiment(data_path, output_path):
 
     stats_df = pd.DataFrame(epoch_stats)
     stats_df.to_csv(f"./outputs/training_stats_ml_synth.csv", index=False)
+
+    runtime_df = pd.DataFrame(runtime_stats)
+    runtime_df.to_csv(f"./outputs/runtime_stats_lgbm.csv", index=False)
 
     # Online Learning Approach (example, not run above)
     # df = combined_df
