@@ -136,6 +136,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
     all_window_preds = []
     epoch_stats = []
+    runtime_stats = []
 
     train_mape_hist, test_mape_hist = [], []
     train_mse_hist, test_mse_hist = [], []
@@ -191,7 +192,10 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
         print("start training")
         window_start_time = time.time()
-
+        total_epoch_time = 0.0
+        epochs_ran = 0
+        inference_time = 0.0
+        inference_time_per_node = 0.0
         for epoch in range(epochs):
             model.train()
             batch_losses = []
@@ -239,6 +243,8 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
             # scheduler.step()
             epoch_end_time = time.time()
             epoch_time = epoch_end_time - epoch_start_time
+            total_epoch_time += epoch_time
+            epochs_ran += 1
 
             avg_batch_time = epoch_time / max(batch_count, 1)
 
@@ -284,6 +290,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 best_model_state = deepcopy(model.state_dict())
                 patience_counter = 0
 
+                inference_time_per_node = (inference_time / len(y_true_eval)) * 1000
                 preds_df = pd.DataFrame({
                     "window_start": train_start.strftime('%Y-%m'),
                     "BUURTCODE": test_df["BUURTCODE"].values,
@@ -294,7 +301,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                     "y_pred": out_eval[test_indices.cpu()],
                     "embedding": embeddings[test_indices.cpu()].tolist(),
                     "inference_time_full_sec": inference_time,
-                    "inference_time_per_node_ms": (inference_time / len(y_true)) * 1000
+                    "inference_time_per_node_ms": (inference_time / len(y_true_eval)) * 1000
                 })
             else:
                 patience_counter += 1
@@ -314,10 +321,20 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         window_end_time = time.time()
         window_time = window_end_time - window_start_time
 
+        avg_epoch_time = total_epoch_time / max(epochs_ran, 1)
+        avg_batch_time_window = total_epoch_time / max(
+            sum([r["num_batches"] for r in runtime_stats if r["window_start"] == train_start.strftime('%Y-%m') and isinstance(r["epoch"], int)]),
+            1
+        )
+
         runtime_stats.append({
             "window_start": train_start.strftime('%Y-%m'),
             "epoch": "window_total",
             "window_time_sec": window_time,
+            "avg_epoch_time_sec": avg_epoch_time,
+            "avg_batch_time_sec": avg_batch_time_window,
+            "inference_time_per_node_ms": inference_time_per_node,
+            "inference_time_full_sec": inference_time,
             "num_train_samples": len(train_df)
         })
         all_window_preds.append(preds_df)
