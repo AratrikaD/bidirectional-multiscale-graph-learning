@@ -99,6 +99,7 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
 
     all_preds, all_stats = [], []
     runtime_stats = []
+    window_runtime_stats = []
 
     while start + relativedelta(months=window_months + 1) <= end:
         train_start = start
@@ -260,7 +261,7 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
             "test_mape": mape_test
         })
 
-        runtime_stats.append({
+        window_runtime_stats.append({
             "window_start": train_start.strftime('%Y-%m'),
             "epoch": "window_total",
             "window_time_sec": window_time,
@@ -283,6 +284,9 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
 
     preds_all.to_csv("./outputs/mugrep_preds.csv", index=False)
     stats_all.to_csv("./outputs/mugrep_stats.csv", index=False)
+
+    window_runtime_df = pd.DataFrame(window_runtime_stats)
+    window_runtime_df.to_csv("./outputs/mugrep_window_runtime_stats.csv", index=False)
 
     return preds_all, stats_all
         

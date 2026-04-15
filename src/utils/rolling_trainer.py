@@ -137,6 +137,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
     all_window_preds = []
     epoch_stats = []
     runtime_stats = []
+    window_runtime_stats = []
 
     train_mape_hist, test_mape_hist = [], []
     train_mse_hist, test_mse_hist = [], []
@@ -248,6 +249,11 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
             avg_batch_time = epoch_time / max(batch_count, 1)
 
+           
+            print("evaluate")
+            train_mse, train_mape, test_mse, test_mape, out_eval, y_true_eval, embeddings, inference_time = evaluate(
+                model, train_indices, test_indices, hetero_graph, criterion
+            )
             runtime_stats.append({
                 "window_start": train_start.strftime('%Y-%m'),
                 "epoch": epoch + 1,
@@ -257,13 +263,10 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 "compute_time_sec": epoch_compute_time,
                 "subgraph_pct": epoch_subgraph_time / epoch_time if epoch_time > 0 else 0,
                 "compute_pct": epoch_compute_time / epoch_time if epoch_time > 0 else 0,
-                "num_batches": batch_count
+                "num_batches": batch_count,
+                "inference_time_full_sec": inference_time,
+                "inference_time_per_node_ms": (inference_time / len(y_true)) * 1000
             })
-
-            print("evaluate")
-            train_mse, train_mape, test_mse, test_mape, out_eval, y_true_eval, embeddings, inference_time = evaluate(
-                model, train_indices, test_indices, hetero_graph, criterion
-            )
 
             epoch_stats.append({
                 "window_start": train_start.strftime('%Y-%m'),
@@ -327,7 +330,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
             1
         )
 
-        runtime_stats.append({
+        window_runtime_stats.append({
             "window_start": train_start.strftime('%Y-%m'),
             "epoch": "window_total",
             "window_time_sec": window_time,
@@ -348,3 +351,6 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
     runtime_df = pd.DataFrame(runtime_stats)
     runtime_df.to_csv("./outputs/runtime_stats.csv", index=False)
+
+    window_runtime_df = pd.DataFrame(window_runtime_stats)
+    window_runtime_df.to_csv("./outputs/window_runtime_stats.csv", index=False)

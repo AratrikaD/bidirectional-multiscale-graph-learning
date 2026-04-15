@@ -191,6 +191,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
     # To track relative errors per epoch
     epoch_stats = []
     runtime_stats = []
+    window_runtime_stats = []
 
     while start + relativedelta(months=window_months + 1) <= end:
         train_start = start
@@ -318,7 +319,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
 
                 all_window_preds.append(preds_df)
             
-        runtime_stats.append({
+        window_runtime_stats.append({
             "window_start": train_start.strftime('%Y-%m'),
             "epoch": "window_total",
             "window_time_sec": window_time,
@@ -340,6 +341,9 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
     stats_df.to_csv("./outputs/training_stats.csv", index=False)
     runtime_df = pd.DataFrame(runtime_stats)
     runtime_df.to_csv("./outputs/runtime_stats_baseline.csv", index=False)
+    window_runtime_df = pd.DataFrame(window_runtime_stats)
+    window_runtime_df.to_csv("./outputs/window_runtime_stats_baseline.csv", index=False)
+
 
     # Optional: plot learning curves
     fig = plot_learning_curves(epochs, 
