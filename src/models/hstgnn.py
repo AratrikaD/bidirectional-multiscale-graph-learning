@@ -7,7 +7,8 @@ from src.models.micro_encoder import MicroEncoder
 class HierarchicalHeteroGNN(nn.Module):
     def __init__(self, trans_in, macro_in, hidden_dim, out_dim):
         super().__init__()
-        self.micro_encoder = MicroEncoder(trans_in, hidden_dim)
+        self.micro_encoder = nn.Linear(trans_in, hidden_dim)  # Placeholder for actual MicroEncoder implementation
+        # MicroEncoder(trans_in, hidden_dim)
         self.macro_encoder = MacroEncoder(macro_in, hidden_dim)
         self.cross_layer = CrossLevelInteraction(hidden_dim, hidden_dim, hidden_dim)
         self.predictor = nn.Linear(hidden_dim, out_dim)
