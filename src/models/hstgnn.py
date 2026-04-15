@@ -8,7 +8,8 @@ class HierarchicalHeteroGNN(nn.Module):
     def __init__(self, trans_in, macro_in, hidden_dim, out_dim):
         super().__init__()
         self.micro_encoder = MicroEncoder(trans_in, hidden_dim)
-        self.macro_encoder = MacroEncoder(macro_in, hidden_dim)
+        self.macro_encoder = nn.Linear(macro_in, hidden_dim)
+        # MacroEncoder(macro_in, hidden_dim)
         self.cross_layer = CrossLevelInteraction(hidden_dim, hidden_dim, hidden_dim)
         self.predictor = nn.Linear(hidden_dim, out_dim)
         self.prev_macro_state = None
