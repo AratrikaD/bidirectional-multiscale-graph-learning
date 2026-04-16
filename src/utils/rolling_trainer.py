@@ -265,7 +265,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 "compute_pct": epoch_compute_time / epoch_time if epoch_time > 0 else 0,
                 "num_batches": batch_count,
                 "inference_time_full_sec": inference_time,
-                "inference_time_per_node_ms": (inference_time / len(y_true)) * 1000
+                "inference_time_per_node_ms": (inference_time / len(y_true_eval)) * 1000
             })
 
             epoch_stats.append({
@@ -276,7 +276,7 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 "train_mse": train_mse,
                 "test_mse": test_mse,
                 "inference_time_full_sec": inference_time,
-                "inference_time_per_node_ms": (inference_time / len(y_true)) * 1000
+                "inference_time_per_node_ms": (inference_time / len(y_true_eval)) * 1000
                 
             })
             train_mape_hist.append(train_mape)
@@ -342,7 +342,11 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
         })
         all_window_preds.append(preds_df)
         start += relativedelta(months=1)
-
+    
+    window_runtime_df = pd.DataFrame(window_runtime_stats)
+    print("Window-level runtime stats:", window_runtime_df)
+    window_runtime_df.to_csv("./outputs/window_runtime_stats.csv", index=False)
+    
     final_preds_df = pd.concat(all_window_preds, ignore_index=True)
     final_preds_df.to_csv("./outputs/all_test_predictions.csv", index=False)
 
@@ -352,5 +356,13 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
     runtime_df = pd.DataFrame(runtime_stats)
     runtime_df.to_csv("./outputs/runtime_stats.csv", index=False)
 
-    window_runtime_df = pd.DataFrame(window_runtime_stats)
-    window_runtime_df.to_csv("./outputs/window_runtime_stats.csv", index=False)
+    # Log aggregate metrics to MLflow
+    import mlflow
+    if window_runtime_stats:
+        mlflow.log_metric("total_window_time_sec", sum(r["window_time_sec"] for r in window_runtime_stats))
+        mlflow.log_metric("avg_batch_time_sec", float(pd.DataFrame(window_runtime_stats)["avg_batch_time_sec"].mean()))
+        mlflow.log_metric("avg_epoch_time_sec", float(pd.DataFrame(window_runtime_stats)["avg_epoch_time_sec"].mean()))
+        mlflow.log_metric("avg_inference_time_full_sec", float(pd.DataFrame(window_runtime_stats)["inference_time_full_sec"].mean()))
+        mlflow.log_metric("avg_inference_per_node_ms", float(pd.DataFrame(window_runtime_stats)["inference_time_per_node_ms"].mean()))
+        wdf = pd.DataFrame(window_runtime_stats)
+        mlflow.log_metric("avg_epoch_time_per_sample_sec", float((wdf["avg_epoch_time_sec"] / wdf["num_train_samples"]).mean()))

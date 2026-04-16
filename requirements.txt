@@ -2,6 +2,8 @@ setuptools
 matplotlib~=3.5.0
 tqdm~=4.66.3
 tomli
+azure-ai-ml
+azure-identity
 azureml-core==1.59.0
 azureml-dataset-runtime==1.59.0
 azureml-defaults==1.59.0

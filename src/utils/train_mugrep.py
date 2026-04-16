@@ -288,5 +288,15 @@ def train_sliding_window_mugrep(model, optimizer, criterion,
     window_runtime_df = pd.DataFrame(window_runtime_stats)
     window_runtime_df.to_csv("./outputs/mugrep_window_runtime_stats.csv", index=False)
 
+    # Log aggregate metrics to MLflow
+    import mlflow
+    if window_runtime_stats:
+        mlflow.log_metric("total_window_time_sec", sum(r["window_time_sec"] for r in window_runtime_stats))
+        mlflow.log_metric("avg_batch_time_sec", float(window_runtime_df["avg_batch_time_sec"].mean()))
+        mlflow.log_metric("avg_epoch_time_sec", float(window_runtime_df["avg_epoch_time_sec"].mean()))
+        mlflow.log_metric("avg_inference_time_full_sec", float(window_runtime_df["inference_time_full_sec"].mean()))
+        mlflow.log_metric("avg_inference_per_node_ms", float(window_runtime_df["inference_time_per_node_ms"].mean()))
+        mlflow.log_metric("avg_epoch_time_per_sample_sec", float((window_runtime_df["avg_epoch_time_sec"] / window_runtime_df["num_train_samples"]).mean()))
+
     return preds_all, stats_all
         

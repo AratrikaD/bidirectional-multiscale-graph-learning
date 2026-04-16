@@ -13,7 +13,7 @@ import time
 def run_lgbm_experiment(data_path, output_path):
 # Load Data
     neighborhood_df = pd.read_csv(f"{data_path}/all_neighborhood_features_rotterdam.csv")
-    transaction_df = pd.read_csv(f"{data_path}/synthetic_transactions.csv")
+    transaction_df = pd.read_csv(f"{data_path}/rotterdam_transaction_data.csv")
 
 
     # Preprocess transaction data
@@ -163,6 +163,14 @@ def run_lgbm_experiment(data_path, output_path):
 
     runtime_df = pd.DataFrame(runtime_stats)
     runtime_df.to_csv(f"./outputs/runtime_stats_lgbm.csv", index=False)
+
+    # Log aggregate metrics to MLflow
+    import mlflow
+    if runtime_stats:
+        mlflow.log_metric("total_window_time_sec", sum(r["window_time_sec"] for r in runtime_stats))
+        mlflow.log_metric("avg_inference_time_full_sec", float(runtime_df["inference_time_sec"].mean()))
+        mlflow.log_metric("avg_inference_per_node_ms", float(runtime_df["inference_per_sample_ms"].mean()))
+        mlflow.log_metric("avg_train_time_per_sample_sec", float((runtime_df["train_time_sec"] / runtime_df["num_train_samples"]).mean()))
 
     # Online Learning Approach (example, not run above)
     # df = combined_df

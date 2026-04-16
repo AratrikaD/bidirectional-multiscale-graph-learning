@@ -318,6 +318,10 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
                 })
 
                 all_window_preds.append(preds_df)
+
+        window_time = time.time() - window_start_time
+        avg_epoch_time = total_epoch_time / max(epochs_ran, 1)
+        avg_batch_time_window = total_epoch_time / max(total_batches_window, 1)
             
         window_runtime_stats.append({
             "window_start": train_start.strftime('%Y-%m'),
@@ -344,6 +348,17 @@ def train_sliding_window(model, optimizer, criterion, transactions, node_feature
     window_runtime_df = pd.DataFrame(window_runtime_stats)
     window_runtime_df.to_csv("./outputs/window_runtime_stats_baseline.csv", index=False)
 
+    # Log aggregate metrics to MLflow
+    if window_runtime_stats:
+        wdf = pd.DataFrame(window_runtime_stats)
+        mlflow.log_metric("total_window_time_sec", wdf["window_time_sec"].sum())
+        mlflow.log_metric("avg_batch_time_sec", wdf["avg_batch_time_sec"].mean())
+        mlflow.log_metric("avg_epoch_time_sec", wdf["avg_epoch_time_sec"].mean())
+        mlflow.log_metric("avg_epoch_time_per_sample_sec", (wdf["avg_epoch_time_sec"] / wdf["num_train_samples"]).mean())
+    if runtime_stats:
+        rdf = pd.DataFrame(runtime_stats)
+        mlflow.log_metric("avg_inference_time_full_sec", rdf["test_inference_time_sec"].mean())
+        mlflow.log_metric("avg_inference_per_node_ms", rdf["test_inference_per_node_ms"].mean())
 
     # Optional: plot learning curves
     fig = plot_learning_curves(epochs, 
@@ -387,22 +402,22 @@ def plot_learning_curves(num_epochs, train_losses, test_losses, train_mapes, tes
 
 
 def run_exp(data_path):
-    gnn = NeighborhoodGNN(in_dim=202, hidden_dim=128, out_dim=32)
-    predictor = TransactionPredictor(trans_dim=11, emb_dim=32, time_dim=2, hidden_dim=100)
+    neighborhood_features_path = os.path.join(data_path,"all_neighborhood_features_rotterdam.csv")
+    edge_path = os.path.join(data_path,"rotterdam_adj_2023.csv")
+    node_features, edge_index = load_graph_data(neighborhood_features_path, edge_path)
+    transaction_path = os.path.join(data_path, "rotterdam_transaction_data.csv")
+    transactions = load_transaction_data(transaction_path)
+
+    node_feature_dim = next(iter(node_features.values())).shape[1]
+    trans_dim = transactions.shape[1] - 5  # Exclude BUURTCODE, TRANSID, LOG_KOOPSOM, YEAR, MONTH
+
+    gnn = NeighborhoodGNN(in_dim=node_feature_dim, hidden_dim=128, out_dim=32)
+    predictor = TransactionPredictor(trans_dim=trans_dim, emb_dim=32, time_dim=2, hidden_dim=100)
     model = IntegratedModel(gnn, predictor)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=0.0001)
     criterion = nn.MSELoss()
 
-    neighborhood_features_path = os.path.join(data_path,"all_neighborhood_features_rotterdam.csv")
-
-    # r"C:\Users\AratrikaD\rdlabs-gnns-for-property-valuation\gnns-for-property-valuation\housing-data\all_neighborhood_features_rotterdam.csv"
-
-    edge_path = os.path.join(data_path,"rotterdam_adj_2023.csv")
-    # r"C:\Users\AratrikaD\rdlabs-gnns-for-property-valuation\gnns-for-property-valuation\housing-data\rotterdam_adj_2023.csv" 
-    node_features, edge_index = load_graph_data(neighborhood_features_path, edge_path)
-    transaction_path = os.path.join(data_path, "synthetic_transactions.csv")
-    transactions = load_transaction_data(transaction_path)
     print("start training")
     train_sliding_window(model, optimizer, criterion, transactions, node_features, edge_index,
                         window_months=61, epochs=100, batch_size=64)

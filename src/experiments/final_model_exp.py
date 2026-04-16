@@ -13,7 +13,7 @@ def run_final_exp(data_path, hyperparameters):
     
     neighborhood_features_path = os.path.join(data_path,"all_neighborhood_features_rotterdam.csv")
     edge_path = os.path.join(data_path,"rotterdam_adj_2023.csv")
-    transaction_path = os.path.join(data_path, "synthetic_transactions.csv")
+    transaction_path = os.path.join(data_path, "synthetic_transaction_data.csv")
 
     node_features, edge_index = load_graph_data(neighborhood_features_path, edge_path)
     transactions = load_transaction_data(transaction_path)
@@ -32,5 +32,5 @@ def run_final_exp(data_path, hyperparameters):
     
     print("start training")
     train_sliding_window(model=model, optimizer=optimizer, criterion=criterion, transactions=transactions, node_features=node_features, edge_index=edge_index,
-                        window_months=61, epochs=1, batch_size=128, base_patience=30)
+                        window_months=61, epochs=100, batch_size=128, base_patience=30)
     

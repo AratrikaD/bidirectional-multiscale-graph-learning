@@ -314,7 +314,7 @@ def run_exp_online(data_path: str):
         os.path.join(data_path, "all_neighborhood_features_rotterdam.csv"),
         os.path.join(data_path, "rotterdam_adj_2023.csv"),
     )
-    trans = load_transaction_data(os.path.join(data_path, "rotterdam_transaction_data.csv"))
+    trans = load_transaction_data(os.path.join(data_path, "synthetic_transaction_data.csv"))
 
     # --- model & optimiser --------------------------------------------
     t_in = trans.shape[1] - 3  # minus BUURTCODE/YEAR/MONTH/LOG_KOOPSOM

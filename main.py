@@ -1,6 +1,9 @@
 import sys
 import os
 import tomli
+
+DIR = os.path.dirname(os.path.realpath(__file__))
+
 from src.experiments.global_graph_embedding import run_experiment
 from src.utils.azure_utils import parse_hyperparameter_args, get_hyperparameter_settings
 # from src.experiments.lightgbm_baseline import run_lgbm_experiment
@@ -14,8 +17,6 @@ from src.experiments.mugrep_exp import run_mugrep_exp
 import argparse
 import mlflow
 import time
-
-DIR = os.path.dirname(os.path.realpath(__file__))
 
 def read_config(path: str) -> dict:
     try:
@@ -33,7 +34,7 @@ def read_config(path: str) -> dict:
 #     if params.data_path != None:
 #         data_path = params.data_path
 #     else:
-#         data_path = os.path.join(script_dir,"housing-data")
+#         data_path = os.path.join(script_dir,"housing")
 #     print(data_path)
 #     config_path = os.path.join(script_dir, "config")
 
@@ -66,21 +67,26 @@ def main(params):
             data_path = params.data_path
             # output_path = os.path.join(script_dir, "outputs")
         else:
-            data_path = os.path.join(script_dir,"housing-data")
+            data_path = os.path.join(script_dir, "housing-data")
             # output_path = os.path.join(script_dir, "outputs")
         print(data_path)
-        run_final_exp(data_path, hyperparameters=params)
-        # run_exp(data_path)
-        # run_exp_online(data_path)
-        # run_lgbm_experiment(data_path)
+        # run_final_exp(data_path, hyperparameters=params)
+        run_exp(data_path)
+        # run_mugrep_exp(data_path, hyperparameters=params)
+        # run_lgbm_experiment(data_path, "./outputs")
 
 if __name__ == "__main__":
     mlflow.create_experiment(str(time.time()))
     with mlflow.start_run():
-        DIR = os.path.dirname(os.path.realpath(__file__))
         HYPERPARAMETER_PATH = os.path.join(
                 DIR, "hyperparameter_settings.toml"
             )
         params = parse_hyperparameter_args(HYPERPARAMETER_PATH)
         print(f"{params}")
+        start_time = time.time()
         main(params)
+        elapsed = time.time() - start_time
+        hours, remainder = divmod(elapsed, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"Experiment runtime: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
+        mlflow.log_metric("runtime_seconds", elapsed)

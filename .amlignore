@@ -1,0 +1,10 @@
+housing/geodata/
+archive/
+.venv/
+.git/
+.idea/
+__pycache__/
+*.pyc
+.gitignore
+LICENSE
+README.md

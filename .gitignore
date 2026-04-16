@@ -3,3 +3,5 @@ __pycache__
 /gnn_paper
 /figures
 /outputs
+/archive
+.azureml/config.toml

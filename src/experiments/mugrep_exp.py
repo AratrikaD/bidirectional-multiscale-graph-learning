@@ -57,7 +57,7 @@ def run_mugrep_exp(data_path, hyperparameters):
 
     neighborhood_features_path = os.path.join(data_path, "all_neighborhood_features_rotterdam.csv")
     edge_path = os.path.join(data_path, "rotterdam_adj_2023.csv")
-    transaction_path = os.path.join(data_path, "rotterdam_transaction_data.csv")
+    transaction_path = os.path.join(data_path, "synthetic_transaction_data.csv")
 
     comm_graph, nb_latest, idmap, idmap_rev, dmap, dmap_rev = load_neighborhood_data(neighborhood_features_path, edge_path)
     comm_graph = comm_graph.to(device)

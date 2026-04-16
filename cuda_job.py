@@ -70,7 +70,7 @@ if __name__ == "__main__":
     hp_settings = get_hyperparameter_settings(hyperparameter_path)
     hyperparameters, experiment_settings = hp_settings['hyperparameters'], hp_settings['experiment']
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    experiment_name = f"version_{timestamp}"
+    experiment_name = "graph-fullexperiments"
 
 
     
@@ -101,17 +101,18 @@ if __name__ == "__main__":
     print(hyperparameter_inputs)
 
     command_string = "python main.py "
+    # command_string = "pip install lightgbm && python main.py "
 
     command_string = update_command_string(command_string, hyperparameters)
     # Define the command job
     command_job = command(
-        code="bidirectional-multiscale-graph-learning", ## Adjust this path based on your project structure
+        code="", ## Adjust this path based on your project structure
         command=command_string, ## Adjust this path based on your project structure
         inputs=hyperparameter_inputs,
         compute=compute_name,
         environment=env_name,
         outputs={},
-        name="mugrep-original-lr0001-e-100", # Name of the job
+        name=f"baseline2-rdam-e100-{timestamp}", # Name of the job
         experiment_name=experiment_name,
         identity=identity
     )
@@ -134,4 +135,4 @@ if __name__ == "__main__":
     # returned_sweep_job = ml_client.create_or_update(sweep_job)
     # # Submit the job
     ml_client.jobs.create_or_update(command_job)
-    print(f"Job {experiment_name} submitted to Azure ML.")
+    print(f"Job {command_job.name} submitted to Azure ML.")
