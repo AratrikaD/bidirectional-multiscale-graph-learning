@@ -8,7 +8,8 @@ class HierarchicalHeteroGNN(nn.Module):
     def __init__(self, trans_in, macro_in, hidden_dim, out_dim):
         super().__init__()
         self.micro_encoder = MicroEncoder(trans_in, hidden_dim)
-        self.macro_encoder = MacroEncoder(macro_in, hidden_dim)
+        self.macro_encoder = nn.Linear(macro_in, hidden_dim)
+        # MacroEncoder(macro_in, hidden_dim)
         self.cross_layer = CrossLevelInteraction(hidden_dim, hidden_dim, hidden_dim)
         self.predictor = nn.Linear(hidden_dim, out_dim)
         self.prev_macro_state = None
@@ -26,9 +27,9 @@ class HierarchicalHeteroGNN(nn.Module):
         # data['transaction'].neighborhood_index
 
         h_micro = self.micro_encoder(trans_x, trans_edge_index)
-        h_macro_gated, h_macro_raw = self.macro_encoder(macro_x, macro_edge_index, self.prev_macro_state)
+        h_macro = self.macro_encoder(macro_x)
 
-        h_trans_final, h_macro_final = self.cross_layer(h_micro, h_macro_gated, trans_to_neigh)
+        h_trans_final, h_macro_final = self.cross_layer(h_micro, h_macro, trans_to_neigh)
 
         self.prev_macro_state = h_macro_final.detach()
 
@@ -43,8 +44,8 @@ class HierarchicalHeteroGNN(nn.Module):
         trans_to_neigh = data['transaction'].neighborhood_index
 
         h_micro = self.micro_encoder(trans_x, trans_edge_index)
-        h_macro_gated, h_macro_raw = self.macro_encoder(macro_x, macro_edge_index, self.prev_macro_state)
-        h_trans_final, h_macro_final = self.cross_layer(h_micro, h_macro_gated, trans_to_neigh)
+        h_macro = self.macro_encoder(macro_x)
+        h_trans_final, h_macro_final = self.cross_layer(h_micro, h_macro, trans_to_neigh)
 
         self.prev_macro_state = h_macro_final.detach()
 

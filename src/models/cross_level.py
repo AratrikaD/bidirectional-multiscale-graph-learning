@@ -33,11 +33,11 @@ class CrossLevelInteraction(nn.Module):
         fused_macro_embed = fuse_gate * h_macro_proj + (1 - fuse_gate) * bottom_up_macro
         
         # Top-down injection
-        # aligned_macro = fused_macro_embed[trans_to_neigh]
-        # gamma = torch.sigmoid(self.W_gamma(h_micro_proj) + self.U_gamma(aligned_macro))
-        # trans_embed_final = gamma * h_micro_proj + (1 - gamma) * aligned_macro
+        aligned_macro = fused_macro_embed[trans_to_neigh]
+        gamma = torch.sigmoid(self.W_gamma(h_micro_proj) + self.U_gamma(aligned_macro))
+        trans_embed_final = gamma * h_micro_proj + (1 - gamma) * aligned_macro
         
-        trans_embed_final = h_micro_proj
+        # trans_embed_final = h_micro_proj
         return trans_embed_final, fused_macro_embed
 
 
